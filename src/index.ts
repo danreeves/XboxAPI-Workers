@@ -58,7 +58,7 @@ async function handleAuthRedirect(request: IRequest, env: Env) {
   const params = new URLSearchParams({
     client_id: env.MS_CLIENT_ID,
     redirect_uri: uri,
-    scope: 'XboxLive.signin',
+    scope: 'XboxLive.signin XboxLive.offline_access',
     response_type: 'code',
     prompt: 'select_account',
   })
@@ -77,7 +77,7 @@ async function handleAuthCallback(request: IRequest, env: Env) {
     return error(502, 'Missing client ID/Secret')
   }
 
-  if (!request.query || !request.query.code || !request.query.source) {
+  if (!request.query) {
     return error(400, 'Missing query parameters')
   }
 
@@ -108,15 +108,15 @@ async function handleAuthCallback(request: IRequest, env: Env) {
 
   const json = await response.json<{ access_token: string }>()
 
-  const params = new URLSearchParams({
-    code: `access_token:${json.access_token}`,
-  })
+  // const params = new URLSearchParams({
+  //   code: `access_token:${json.access_token}`,
+  // })
 
-  if (request.query.state) {
-    params.set('state', request.query.state as string)
-  }
+  // if (request.query.state) {
+  //   params.set('state', request.query.state as string)
+  // }
 
-  return Response.redirect(`${request.query.source}?${params}`)
+  return Response.json(json)
 }
 
 async function handleProfileRequest(request: IRequest, env: Env) {
