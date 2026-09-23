@@ -1,0 +1,11 @@
+name = "xboxapi-workers"
+main = "src/index.ts"
+compatibility_date = "2024-05-12"
+
+kv_namespaces = [
+    { binding = "TOKEN_STORE", id = "b7a4aa4a499e49b28e100973d8d8f242" },
+    { binding = "PROFILES_CACHE", id = "656edb5e52cf47eeab50795d036e7dda" },
+]
+
+[observability.logs]
+enabled = true

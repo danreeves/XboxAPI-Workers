@@ -5,6 +5,3 @@
 node_modules/
 dist/
 transpiled/
-
-# Wrangler
-wrangler.toml
