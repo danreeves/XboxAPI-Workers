@@ -65,3 +65,9 @@ Example profile:
   "location": "Hello from the otherside!"
 }
 ```
+
+### Resize a gamerpic
+
+**GET** `/resize?url={gamerpic}&size={size}`
+
+Returns a 90x100 transparent PNG with the square gamerpic centred on it at `size` pixels (an integer from 50 to 90, defaults to 90). `url` must be a percent-encoded gamerpic URL from the Xbox image service (`images-eds-ssl.xboxlive.com` or `images-eds.xboxlive.com`, path `/image`), otherwise the request is rejected with a 400.

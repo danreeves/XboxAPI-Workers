@@ -10,6 +10,18 @@ export interface Env {
   WEBHOOK_URL?: string
 }
 
+// Gamerpics are served by the Xbox image service, so only its hosts can be
+// resized. Anything else would turn /resize into an open image proxy.
+const GAMERPIC_HOSTS = new Set([
+  'images-eds-ssl.xboxlive.com',
+  'images-eds.xboxlive.com',
+])
+const RESIZE_CANVAS_WIDTH = 90
+const RESIZE_CANVAS_HEIGHT = 100
+const RESIZE_SIZE_RANGE: [number, number] = [50, RESIZE_CANVAS_WIDTH]
+const TRANSPARENT_CANVAS_URL =
+  'https://placehold.co/90x100/transparent/transparent.png'
+
 const router = Router()
 
 router
@@ -18,6 +30,7 @@ router
   .get('/auth/callback', handleAuthCallback)
   .get('/profiles/search/:name', handleSearchRequest)
   .get('/profiles/:id', handleProfileRequest)
+  .get('/resize', handleResizeRequest)
   .get('/robots.txt', () => text('User-agent: *\nAllow: /$\nDisallow: /'))
   .all('*', () => error(404))
 
@@ -151,6 +164,79 @@ async function handleSearchRequest(request: IRequest, env: Env) {
   }
 
   return Response.json({ ...response.profile, debug: response.info })
+}
+
+// Same output as the Steam profile worker's /resize: a 90x100 transparent PNG
+// with the square gamerpic centred at `size` pixels, so it can fill a
+// rectangular portrait without being stretched.
+async function handleResizeRequest(request: IRequest) {
+  const { searchParams } = new URL(request.url)
+  const source = searchParams.get('url')
+
+  if (!source) {
+    return error(400, 'Missing image URL')
+  }
+
+  let imageUrl: URL
+
+  try {
+    imageUrl = new URL(source)
+  } catch {
+    return error(400, 'Invalid image URL')
+  }
+
+  if (
+    (imageUrl.protocol !== 'https:' && imageUrl.protocol !== 'http:') ||
+    !GAMERPIC_HOSTS.has(imageUrl.hostname) ||
+    imageUrl.port !== '' ||
+    imageUrl.pathname !== '/image'
+  ) {
+    return error(400, 'Disallowed image URL')
+  }
+
+  const size = parseResizeSize(searchParams.get('size'))
+
+  if (size === null) {
+    return error(400, `Invalid size [${RESIZE_SIZE_RANGE.join('-')}]`)
+  }
+
+  return fetch(TRANSPARENT_CANVAS_URL, {
+    cf: {
+      image: {
+        width: RESIZE_CANVAS_WIDTH,
+        height: RESIZE_CANVAS_HEIGHT,
+        format: 'png',
+        draw: [
+          {
+            url: imageUrl.toString(),
+            width: size,
+            height: size,
+            fit: 'contain',
+            left: Math.floor((RESIZE_CANVAS_WIDTH - size) / 2),
+            top: Math.floor((RESIZE_CANVAS_HEIGHT - size) / 2),
+          },
+        ],
+      },
+    },
+  })
+}
+
+function parseResizeSize(value: string | null): number | null {
+  if (value === null) {
+    return RESIZE_CANVAS_WIDTH
+  }
+
+  const size = Number(value)
+
+  if (
+    !Number.isInteger(size) ||
+    size < RESIZE_SIZE_RANGE[0] ||
+    size > RESIZE_SIZE_RANGE[1]
+  ) {
+    return null
+  }
+
+  return size
 }
 
 async function handleHome() {
