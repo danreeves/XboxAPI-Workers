@@ -1,6 +1,7 @@
 import type { IRequest } from 'itty-router'
 
 import { Router, error, html, text } from 'itty-router'
+import { type Rgb, flattenPng } from './png'
 import { XboxService } from './xbox/service'
 import home from './home.html'
 
@@ -21,6 +22,9 @@ const RESIZE_CANVAS_HEIGHT = 100
 const RESIZE_SIZE_RANGE: [number, number] = [50, RESIZE_CANVAS_WIDTH]
 const TRANSPARENT_CANVAS_URL =
   'https://placehold.co/90x100/transparent/transparent.png'
+// Black blends into the dark portrait frames best, community feedback preferred
+// it over the green the unflattened images used to show
+const DEFAULT_RESIZE_BACKGROUND = '000000'
 
 const router = Router()
 
@@ -166,9 +170,10 @@ async function handleSearchRequest(request: IRequest, env: Env) {
   return Response.json({ ...response.profile, debug: response.info })
 }
 
-// Same output as the Steam profile worker's /resize: a 90x100 transparent PNG
-// with the square gamerpic centred at `size` pixels, so it can fill a
-// rectangular portrait without being stretched.
+// Same layout as the Steam profile worker's /resize: a 90x100 PNG with the
+// square gamerpic centred at `size` pixels, so it can fill a rectangular
+// portrait without being stretched. The portrait frame material ignores
+// transparency, so the padding is the `background` colour.
 async function handleResizeRequest(request: IRequest) {
   const { searchParams } = new URL(request.url)
   const source = searchParams.get('url')
@@ -200,7 +205,13 @@ async function handleResizeRequest(request: IRequest) {
     return error(400, `Invalid size [${RESIZE_SIZE_RANGE.join('-')}]`)
   }
 
-  return fetch(TRANSPARENT_CANVAS_URL, {
+  const background = parseBackground(searchParams.get('background'))
+
+  if (background === null) {
+    return error(400, 'Invalid background [RRGGBB]')
+  }
+
+  const resized = await fetch(TRANSPARENT_CANVAS_URL, {
     cf: {
       image: {
         width: RESIZE_CANVAS_WIDTH,
@@ -217,6 +228,28 @@ async function handleResizeRequest(request: IRequest) {
           },
         ],
       },
+    },
+  })
+
+  if (!resized.ok || resized.headers.get('Content-Type') !== 'image/png') {
+    return resized
+  }
+
+  const png = new Uint8Array(await resized.arrayBuffer())
+  let body: Uint8Array = png
+
+  // A PNG that can't be flattened is still returned as Cloudflare made it
+  try {
+    body = await flattenPng(png, background)
+  } catch (e) {
+    console.error(`Failed to flatten the resized image: ${e}`)
+  }
+
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'image/png',
+      'Cache-Control':
+        resized.headers.get('Cache-Control') ?? 'public, max-age=86400',
     },
   })
 }
@@ -237,6 +270,21 @@ function parseResizeSize(value: string | null): number | null {
   }
 
   return size
+}
+
+// Six hex digits without a `#`, which would start the URL fragment
+function parseBackground(value: string | null): Rgb | null {
+  const hex = value ?? DEFAULT_RESIZE_BACKGROUND
+
+  if (!/^[0-9a-f]{6}$/i.test(hex)) {
+    return null
+  }
+
+  return [
+    parseInt(hex.slice(0, 2), 16),
+    parseInt(hex.slice(2, 4), 16),
+    parseInt(hex.slice(4, 6), 16),
+  ]
 }
 
 async function handleHome() {
