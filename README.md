@@ -68,6 +68,8 @@ Example profile:
 
 ### Resize a gamerpic
 
-**GET** `/resize?url={gamerpic}&size={size}`
+**GET** `/resize?url={gamerpic}&size={size}&background={RRGGBB}`
 
-Returns a 90x100 transparent PNG with the square gamerpic centred on it at `size` pixels (an integer from 50 to 90, defaults to 90). `url` must be a percent-encoded gamerpic URL from the Xbox image service (`images-eds-ssl.xboxlive.com` or `images-eds.xboxlive.com`, path `/image`), otherwise the request is rejected with a 400.
+Returns a 90x100 PNG with the square gamerpic centred on it at `size` pixels (an integer from 50 to 90, defaults to 90). `url` must be a percent-encoded gamerpic URL from the Xbox image service (`images-eds-ssl.xboxlive.com` or `images-eds.xboxlive.com`, path `/image`), otherwise the request is rejected with a 400.
+
+The image is opaque. ProfilePictures puts the picture into the icon slot of Darktide's portrait frame material, which ignores transparency, so the padding around the gamerpic is filled with `background`. `background` is six hex digits without `#` (defaults to `000000`, black). Anything else is rejected with a 400.
